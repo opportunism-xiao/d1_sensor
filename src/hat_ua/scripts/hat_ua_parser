@@ -1,4 +1,0 @@
-#!/usr/bin/env python3
-"""Console entry point for hat_ua parser node."""
-from hat_ua.parser_node import main
-main()

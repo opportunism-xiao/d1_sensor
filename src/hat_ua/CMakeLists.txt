@@ -61,12 +61,16 @@ install(TARGETS hat_ua_driver
 install(DIRECTORY ${PROJECT_NAME}/
   DESTINATION local/lib/python${_PYTHON_VER}/dist-packages/${PROJECT_NAME}
 )
-install(PROGRAMS scripts/hat_ua_parser
+install(PROGRAMS hat_ua/parser_node.py
   DESTINATION lib/${PROJECT_NAME}
+  RENAME hat_ua_parser
 )
 
 # ---- Launch files ----
 install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 

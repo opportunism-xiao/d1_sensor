@@ -2,15 +2,17 @@
 """
 HAT-UA Weather Sensor — One-Launch Startup
 
-Starts driver (C++) + parser (Python) together.
+Parameters are loaded from config/hat_ua_params.yaml by default.
+Override on the command line:
 
-Usage:
-  ros2 launch hat_ua hat_ua.launch.py                         # auto-detect
-  ros2 launch hat_ua hat_ua.launch.py simulate:=true           # test without hardware
-  ros2 launch hat_ua hat_ua.launch.py serial_dev:=/dev/hat_ua  # real sensor
+  ros2 launch hat_ua hat_ua.launch.py                                   # YAML defaults
+  ros2 launch hat_ua hat_ua.launch.py simulate:=true                    # no hardware
+  ros2 launch hat_ua hat_ua.launch.py serial_dev:=/dev/hat_ua           # real sensor
+  ros2 launch hat_ua hat_ua.launch.py leaf_id:=2 poll_rate:=2.0         # custom
 """
 
-import glob
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo
 from launch.substitutions import LaunchConfiguration
@@ -18,57 +20,47 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    # ---- auto-detect USB device ----
-    default_dev = '/dev/ttyUSB0'
-    candidates = glob.glob('/dev/serial/by-id/usb*')
-    if candidates:
-        default_dev = candidates[0]
+    # Absolute path to the YAML config (works both source & install)
+    pkg_share = get_package_share_directory('hat_ua')
+    default_config = os.path.join(pkg_share, 'config', 'hat_ua_params.yaml')
 
-    # ---- arguments ----
-    serial_dev_arg = DeclareLaunchArgument(
-        'serial_dev', default_value=default_dev,
-        description='Serial port. Use /dev/serial/by-id/... for stability.')
+    # -- User-exposed arguments (override YAML defaults) --
+    serial_dev = LaunchConfiguration('serial_dev', default='/dev/hat_ua')
+    leaf_id    = LaunchConfiguration('leaf_id',    default='1')
+    baud_rate  = LaunchConfiguration('baud_rate',  default='9600')
+    poll_rate  = LaunchConfiguration('poll_rate',  default='1.0')
+    simulate   = LaunchConfiguration('simulate',   default='false')
 
-    leaf_id_arg = DeclareLaunchArgument(
-        'leaf_id', default_value='1',
-        description='Modbus slave ID (HAT-UA default: 1)')
+    # -- Declare them so they show up in --show-arguments --
+    args = [
+        DeclareLaunchArgument('serial_dev', default_value='/dev/hat_ua',
+            description='Serial port (use /dev/hat_ua after udev setup)'),
+        DeclareLaunchArgument('leaf_id', default_value='1',
+            description='Modbus slave ID (1~50)'),
+        DeclareLaunchArgument('baud_rate', default_value='9600',
+            description='Serial baud rate (HAT-UA fixed at 9600)'),
+        DeclareLaunchArgument('poll_rate', default_value='1.0',
+            description='Polling rate in Hz'),
+        DeclareLaunchArgument('simulate', default_value='false',
+            description='Simulation mode — no hardware needed'),
+    ]
 
-    poll_rate_arg = DeclareLaunchArgument(
-        'poll_rate', default_value='1.0',
-        description='Polling rate in Hz')
-
-    baud_arg = DeclareLaunchArgument(
-        'baud_rate', default_value='9600',
-        description='Serial baud rate (HAT-UA: 9600)')
-
-    simulate_arg = DeclareLaunchArgument(
-        'simulate', default_value='false',
-        description='Run with fake data (no hardware needed)')
-
-    # ---- driver node (C++) ----
+    # -- Nodes --
     driver = Node(
         package='hat_ua',
         executable='hat_ua_driver',
         name='hat_ua_driver',
         output='screen',
-        parameters=[{
-            'modbus_is_remote': False,
-            'modbus_prefix': '/modbus/hat_ua',
-            'modbus_leaf_id': LaunchConfiguration('leaf_id'),
-            'serial_is_remote': False,
-            'serial_prefix': '/serial/hat_ua',
-            'serial_dev_name': LaunchConfiguration('serial_dev'),
-            'serial_baud_rate': LaunchConfiguration('baud_rate'),
-            'serial_data': 8,
-            'serial_parity': False,
-            'serial_stop': 1,
-            'serial_flow_control': False,
-            'poll_rate': LaunchConfiguration('poll_rate'),
-            'simulate': LaunchConfiguration('simulate'),
+        parameters=[default_config, {
+            # CLI overrides take precedence over YAML defaults
+            'serial_dev_name': serial_dev,
+            'modbus_leaf_id': leaf_id,
+            'serial_baud_rate': baud_rate,
+            'poll_rate': poll_rate,
+            'simulate': simulate,
         }],
     )
 
-    # ---- parser node (Python) ----
     parser = Node(
         package='hat_ua',
         executable='hat_ua_parser',
@@ -76,14 +68,11 @@ def generate_launch_description():
         output='screen',
     )
 
-    return LaunchDescription([
-        serial_dev_arg,
-        leaf_id_arg,
-        poll_rate_arg,
-        baud_arg,
-        simulate_arg,
+    return LaunchDescription(args + [
         driver,
         parser,
-        LogInfo(msg=['HAT-UA starting — simulate: ', LaunchConfiguration('simulate'),
-                     ', device: ', LaunchConfiguration('serial_dev')]),
+        LogInfo(msg=[
+            'HAT-UA started — device: ', serial_dev,
+            ', simulate: ', simulate, ', rate: ', poll_rate, ' Hz',
+        ]),
     ])

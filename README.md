@@ -1,6 +1,7 @@
-# HAT-UA 气象传感器 ROS2 驱动
+# HAT-UA 气象传感器 ROS2 驱动 — 基于 C++ 原生 API，高性能低延迟
 
 基于 Modbus RTU over USB 驱动 **HAT-UA 气象监测传感器**（广东大镓传感），
+C++ 驱动层直接调用 Modbus 原生 API，独立轮询线程，零 DDS 拷贝开销，
 发布温度、湿度、露点、气压、海拔、空气密度 6 项物理量。
 
 **兼容 ROS2 Humble / Iron / Jazzy / Rolling。**
