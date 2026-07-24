@@ -3,7 +3,9 @@
 HAT-UA Weather Sensor — Parser Node
 
 Subscribes to /modbus/hat_ua/raw (ModbusData), converts raw register values
-to physical quantities, and publishes them as std_msgs/Float32.
+to physical quantities, and publishes them in two forms:
+  - /hat_ua/all — HatUaData (single message with all 7 fields)
+  - /hat_ua/temperature ... /hat_ua/error_flag — Float32 (one per field)
 
 =======================================================================
   HAT-UA Register Map (official, FC 0x03 / 0x04, int16, read-only)
@@ -26,7 +28,7 @@ to physical quantities, and publishes them as std_msgs/Float32.
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
-from hat_ua.msg import ModbusData
+from hat_ua.msg import ModbusData, HatUaData
 
 
 def _s16(raw: int) -> int:
@@ -58,9 +60,13 @@ class HatUaParser(Node):
             self.pubs[name] = self.create_publisher(Float32, topic, 10)
             self.get_logger().info(f'  {name:12s} → {topic}  ({unit})')
 
+        # 合并话题 — 一条消息包含全部物理量
+        self.all_pub = self.create_publisher(HatUaData, '/hat_ua/all', 10)
+
         self.sub = self.create_subscription(
             ModbusData, '/modbus/hat_ua/raw', self._cb, 10)
 
+        self.get_logger().info('  all         → /hat_ua/all  (combined)')
         self.get_logger().info('HAT-UA Parser ready, waiting for data...')
 
     def _cb(self, msg: ModbusData):
@@ -90,6 +96,18 @@ class HatUaParser(Node):
             f32 = Float32(data=phys)
             self.pubs[name].publish(f32)
             vals[name] = phys
+
+        # 合并消息
+        all_msg = HatUaData()
+        all_msg.header = msg.header
+        all_msg.temperature = vals['temperature']
+        all_msg.humidity    = vals['humidity']
+        all_msg.dew_point   = vals['dew_point']
+        all_msg.pressure    = vals['pressure']
+        all_msg.altitude    = vals['altitude']
+        all_msg.density     = vals['density']
+        all_msg.error_flag  = int(vals['error_flag'])
+        self.all_pub.publish(all_msg)
 
         self.get_logger().info(
             f'T={vals["temperature"]:.1f}℃  '

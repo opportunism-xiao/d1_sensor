@@ -30,6 +30,7 @@ message(STATUS "hat_ua: detected Python ${_PYTHON_VER}")
 # ---- Message generation ----
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ModbusData.msg"
+  "msg/HatUaData.msg"
   DEPENDENCIES std_msgs
 )
 
